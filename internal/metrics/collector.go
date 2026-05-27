@@ -9,6 +9,7 @@ import (
 )
 
 // Snapshot is a point in time read of system metrics
+// Field names match web/lib/types.ts → MetricsPayload exactly.
 type Snapshot struct {
 	CPU             float64 `json:"cpu"`
 	RAM             float64 `json:"ram"`
@@ -18,10 +19,9 @@ type Snapshot struct {
 	TimestampMillis int64   `json:"timestampMillis"`
 }
 
-// Collect scrapes a single system metrics snapshot.
-// interval=0 tells gopsutils to diff against its cached previous
-// /proc/stat read rather than sleeping
 func Collect() (*Snapshot, error) {
+	// 0 = diff against gopsutil's cached previous reading instead of sleeping.
+	// false = return one aggregate value across all cores, not per-core.
 	cpuPercents, err := cpu.Percent(0, false)
 	if err != nil {
 		return nil, err
