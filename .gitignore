@@ -1,1 +1,12 @@
+# Go
+procstream
+
+# Frontend
+web/node_modules
+web/.next
+web/out
+
+# Env
+.env
+.env.local
 outline.md
