@@ -1,7 +1,9 @@
 package proc
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/user"
 	"strconv"
@@ -22,6 +24,11 @@ type Entry struct {
 
 // captured once at startup - th UID of the user who launched procstream.
 var currentUID = os.Getuid()
+
+// CurrentUID exposes the server process UID for logging in main.go.
+func CurrentUID() int {
+	return currentUID
+}
 
 // List returns all running processes with CanKill set based on UID ownership
 func List() ([]Entry, error) {
@@ -110,4 +117,27 @@ func Kill(pid int32) KillResult {
 	}
 
 	return KillResult{PID: pid, Success: true}
+}
+
+// HandleKill is the HTTP handler for POST /kill.
+// Decodes the PID from the request body and calls Kill().
+func HandleKill(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		PID int32 `json:"pid"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	result := Kill(req.PID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
