@@ -102,11 +102,11 @@ func Kill(pid int32) KillResult {
 
 	osProc, err := os.FindProcess(int(pid))
 	if err != nil {
-		return KillResult{PID: pid, Success: false, Error: fmt.Sprintf("FindProcess failed: %v")}
+		return KillResult{PID: pid, Success: false, Error: fmt.Sprintf("FindProcess failed: %v", err)}
 	}
 
 	if err := osProc.Signal(os.Interrupt); err != nil {
-		return KillResult{PID: pid, Success: false, Error: fmt.Sprintf("signal failed: %v")}
+		return KillResult{PID: pid, Success: false, Error: fmt.Sprintf("signal failed: %v", err)}
 	}
 
 	return KillResult{PID: pid, Success: true}
