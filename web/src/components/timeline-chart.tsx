@@ -81,9 +81,7 @@ export function TimelineChart({ data }: TimelineChartProps) {
   }, [data]);
 
   return (
-    <div
-      className="rounded-xl border border-(--border) bg-(--card) p-4"
-      style={{ height: 220 }}>
+    <div className="flex h-full min-h-61.5 flex-col rounded-xl border border-(--border) bg-(--card) p-4">
       <p className="mb-3 font-mono text-xs uppercase tracking-widest text-(--muted-foreground)">
         60s history
       </p>
