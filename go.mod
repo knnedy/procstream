@@ -2,10 +2,12 @@ module github.com/knnedy/procstream
 
 go 1.26.2
 
-require github.com/shirou/gopsutil/v4 v4.26.4
+require (
+	github.com/coder/websocket v1.8.14
+	github.com/shirou/gopsutil/v4 v4.26.4
+)
 
 require (
-	github.com/coder/websocket v1.8.14 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
