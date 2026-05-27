@@ -1,64 +1,122 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect, useRef } from "react";
+import { useMetrics } from "@/hooks/use-metrics";
+import { MetricGauge } from "@/components/metric-gauge";
+import { TimelineChart } from "@/components/timeline-chart";
+import { ProcessTable } from "@/components/process-table";
+import { ReconnectBanner } from "@/components/reconnect-banner";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { formatBytes, formatUptime } from "@/lib/utils";
+import { Activity } from "lucide-react";
+
+const MAX_HISTORY = 60;
+
+interface TimelinePoint {
+  timestampMillis: number;
+  cpu: number;
+  ram: number;
+}
+
+export default function Page() {
+  const { metrics, status, retryIn } = useMetrics();
+
+  const [cpuHistory, setCpuHistory] = useState<number[]>([]);
+  const [ramHistory, setRamHistory] = useState<number[]>([]);
+  const [timeline, setTimeline] = useState<TimelinePoint[]>([]);
+  const prevTimestamp = useRef<number>(0);
+
+  useEffect(() => {
+    if (!metrics) return;
+    // deduplicate ticks — skip if same timestamp arrives twice
+    if (metrics.timestampMillis === prevTimestamp.current) return;
+    prevTimestamp.current = metrics.timestampMillis;
+
+    setCpuHistory((prev) => [...prev.slice(-MAX_HISTORY + 1), metrics.cpu]);
+    setRamHistory((prev) => [...prev.slice(-MAX_HISTORY + 1), metrics.ram]);
+    setTimeline((prev) => [
+      ...prev.slice(-MAX_HISTORY + 1),
+      {
+        timestampMillis: metrics.timestampMillis,
+        cpu: metrics.cpu,
+        ram: metrics.ram,
+      },
+    ]);
+  }, [metrics]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-background">
+      <ReconnectBanner status={status} retryIn={retryIn} />
+
+      {/* header */}
+      <header className="border-b border-(--border) bg-(--card) px-6 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Activity className="h-5 w-5 text-(--accent)" />
+            <span className="font-mono text-sm font-bold tracking-widest uppercase text-foreground">
+              ProcStream
+            </span>
+          </div>
+          <div className="flex items-center gap-6">
+            {metrics && (
+              <div className="hidden items-center gap-6 font-mono text-xs text-(--muted-foreground) sm:flex">
+                <span>
+                  uptime{" "}
+                  <span className="text-foreground">
+                    {formatUptime(metrics.uptime)}
+                  </span>
+                </span>
+                <span>
+                  ram{" "}
+                  <span className="text-foreground">
+                    {formatBytes(metrics.ramUsed)} /{" "}
+                    {formatBytes(metrics.ramTotal)}
+                  </span>
+                </span>
+                <span>
+                  processes{" "}
+                  <span className="text-foreground">
+                    {metrics.processes.length}
+                  </span>
+                </span>
+              </div>
+            )}
+            <ThemeToggle />
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      </header>
+
+      <main className="mx-auto max-w-7xl space-y-6 px-6 py-8">
+        {/* hero gauges */}
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="col-span-1 flex items-center justify-center rounded-xl border border-(--border) bg-(--card) py-8">
+            <MetricGauge
+              label="CPU"
+              value={metrics?.cpu ?? 0}
+              history={cpuHistory}
+              color="var(--chart-cpu)"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </div>
+          <div className="col-span-1 flex items-center justify-center rounded-xl border border-(--border) bg-(--card) py-8">
+            <MetricGauge
+              label="RAM"
+              value={metrics?.ram ?? 0}
+              history={ramHistory}
+              color="var(--chart-ram)"
+            />
+          </div>
+          <div className="col-span-2 lg:col-span-2">
+            <TimelineChart data={timeline} />
+          </div>
         </div>
+
+        {/* process table */}
+        {metrics && (
+          <ProcessTable
+            processes={metrics.processes}
+            totalRam={metrics.ramTotal}
+          />
+        )}
       </main>
     </div>
   );
