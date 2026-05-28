@@ -29,11 +29,15 @@ func CollectSystemInfo() (*SystemInfo, error) {
 		return nil, err
 	}
 
+	// cpu.Counts(true) returns logical cores (includes hyperthreading)
+	logicalCores, err := cpu.Counts(true)
+	if err != nil {
+		logicalCores = 0
+	}
+
 	cpuModel := "unknown"
-	cpuCores := 0
 	if len(cpuInfo) > 0 {
 		cpuModel = cpuInfo[0].ModelName
-		cpuCores = int(cpuInfo[0].Cores)
 	}
 
 	return &SystemInfo{
@@ -42,6 +46,6 @@ func CollectSystemInfo() (*SystemInfo, error) {
 		Platform: hostInfo.Platform,
 		Kernel:   hostInfo.KernelVersion,
 		CPUModel: cpuModel,
-		CPUCores: cpuCores,
+		CPUCores: logicalCores,
 	}, nil
 }
