@@ -20,6 +20,13 @@ type Payload struct {
 	Processes []proc.Entry `json:"processes"`
 }
 
+// initMessage is sent once to a client immediately after they connect.
+// Contains static system info that never changes during a session.
+type initMessage struct {
+	Type       string              `json:"type"`
+	SystemInfo *metrics.SystemInfo `json:"systemInfo"`
+}
+
 // client represents one connected browser tab
 type client struct {
 	conn *websocket.Conn
@@ -30,15 +37,23 @@ type client struct {
 
 // Hub manages all active WebSocket connections and the metrics ticker.
 type Hub struct {
-	mu       sync.RWMutex
-	clients  map[*client]struct{}
-	interval time.Duration
+	mu         sync.RWMutex
+	clients    map[*client]struct{}
+	interval   time.Duration
+	systemInfo *metrics.SystemInfo
 }
 
 func NewHub(interval time.Duration) *Hub {
+	sysInfo, err := metrics.CollectSystemInfo()
+	if err != nil {
+		log.Printf("system info collect error: %v", err)
+		sysInfo = &metrics.SystemInfo{}
+	}
+
 	return &Hub{
-		clients:  make(map[*client]struct{}),
-		interval: interval,
+		clients:    make(map[*client]struct{}),
+		interval:   interval,
+		systemInfo: sysInfo,
 	}
 }
 
@@ -56,7 +71,7 @@ func (h *Hub) Run() {
 
 		processes, err := proc.List()
 		if err != nil {
-			log.Printf("prc list error: %v", err)
+			log.Printf("proc list error: %v", err)
 			continue
 		}
 
@@ -119,8 +134,27 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	h.register(c)
 	defer h.unregister(c)
 
+	// send system info immediately on connect before the first tick
+	if err := h.sendSystemInfo(c); err != nil {
+		log.Printf("system info send error: %v", err)
+		return
+	}
+
 	go c.readPump()
 	c.writePump()
+}
+
+// sendSystemInfo sends the static system info to a single client on connect.
+func (h *Hub) sendSystemInfo(c *client) error {
+	data, err := json.Marshal(initMessage{
+		Type:       "init",
+		SystemInfo: h.systemInfo,
+	})
+	if err != nil {
+		return err
+	}
+	c.send <- data
+	return nil
 }
 
 // writePump drains the send channel and writes frames to the connection.
