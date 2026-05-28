@@ -71,7 +71,7 @@ export default function Page() {
             {metrics && (
               <div className="hidden items-center gap-5 font-mono text-xs text-(--muted-foreground) sm:flex">
                 <span>
-                  up{" "}
+                  uptime{" "}
                   <span className="text-foreground">
                     {formatUptime(metrics.uptime)}
                   </span>
@@ -86,13 +86,14 @@ export default function Page() {
                   </span>
                 </span>
                 <span>
-                  procs{" "}
+                  processes{" "}
                   <span className="text-foreground">
                     {metrics.processes.length}
                   </span>
                 </span>
                 {systemInfo && (
                   <span className="hidden lg:inline">
+                    host{" "}
                     <span className="text-foreground">
                       {systemInfo.hostname}
                     </span>

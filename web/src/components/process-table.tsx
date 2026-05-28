@@ -301,7 +301,11 @@ export function ProcessTable({ processes, totalRam }: ProcessTableProps) {
             <span className="font-mono text-xs text-(--muted-foreground)">
               user tasks only
             </span>
-            <Switch checked={userOnly} onCheckedChange={setUserOnly} />
+            <Switch
+              checked={userOnly}
+              onCheckedChange={setUserOnly}
+              className="data-[state=checked]:bg-(--accent) data-[state=unchecked]:bg-(--muted-foreground)/30"
+            />
           </div>
         </div>
 
