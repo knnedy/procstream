@@ -11,16 +11,36 @@ import {
   SortingState,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowUpDown, ArrowUp, ArrowDown, Skull } from "lucide-react";
+import {
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Skull,
+  AlertTriangle,
+} from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ProcessEntry, KillRequest, KillResponse } from "@/lib/types";
 import { formatPercent, formatBytes, severityFromPercent } from "@/lib/utils";
 
 interface ProcessTableProps {
   processes: ProcessEntry[];
   totalRam: number;
+}
+
+interface PendingKill {
+  pid: number;
+  name: string;
 }
 
 const columnHelper = createColumnHelper<ProcessEntry>();
@@ -49,9 +69,18 @@ export function ProcessTable({ processes, totalRam }: ProcessTableProps) {
   const [userOnly, setUserOnly] = useState(false);
   const [killingPids, setKillingPids] = useState<Set<number>>(new Set());
   const [search, setSearch] = useState("");
+  const [pendingKill, setPendingKill] = useState<PendingKill | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
 
-  const handleKill = useCallback(async (pid: number) => {
+  const confirmKill = useCallback((pid: number, name: string) => {
+    setPendingKill({ pid, name });
+  }, []);
+
+  const handleKill = useCallback(async () => {
+    if (!pendingKill) return;
+    const { pid, name } = pendingKill;
+    setPendingKill(null);
+
     setKillingPids((prev) => new Set(prev).add(pid));
 
     try {
@@ -61,8 +90,15 @@ export function ProcessTable({ processes, totalRam }: ProcessTableProps) {
         body: JSON.stringify({ pid } satisfies KillRequest),
       });
       const result: KillResponse = await res.json();
-      if (!result.success) {
-        console.error(`kill failed: ${result.error}`);
+
+      if (result.success) {
+        toast.success(`${name} terminated`, {
+          description: `PID ${pid} was killed successfully`,
+        });
+      } else {
+        toast.error(`Failed to kill ${name}`, {
+          description: result.error,
+        });
         setKillingPids((prev) => {
           const next = new Set(prev);
           next.delete(pid);
@@ -70,13 +106,16 @@ export function ProcessTable({ processes, totalRam }: ProcessTableProps) {
         });
       }
     } catch {
+      toast.error(`Failed to kill ${name}`, {
+        description: "Network error — could not reach server",
+      });
       setKillingPids((prev) => {
         const next = new Set(prev);
         next.delete(pid);
         return next;
       });
     }
-  }, []);
+  }, [pendingKill]);
 
   const columns = useMemo(
     () => [
@@ -143,6 +182,7 @@ export function ProcessTable({ processes, totalRam }: ProcessTableProps) {
         enableSorting: false,
         cell: (info) => {
           const pid = info.row.original.pid;
+          const name = info.row.original.name;
           const canKill = info.getValue();
           const killing = killingPids.has(pid);
 
@@ -151,7 +191,7 @@ export function ProcessTable({ processes, totalRam }: ProcessTableProps) {
               variant="ghost"
               size="sm"
               disabled={!canKill || killing}
-              onClick={() => handleKill(pid)}
+              onClick={() => confirmKill(pid, name)}
               className={`h-7 px-2 font-mono text-xs transition-all ${
                 killing
                   ? "text-(--severity-warning) opacity-60"
@@ -166,7 +206,7 @@ export function ProcessTable({ processes, totalRam }: ProcessTableProps) {
         },
       }),
     ],
-    [killingPids, handleKill, totalRam],
+    [killingPids, confirmKill, totalRam],
   );
 
   const filteredData = useMemo(() => {
@@ -198,97 +238,145 @@ export function ProcessTable({ processes, totalRam }: ProcessTableProps) {
   });
 
   const rows = table.getRowModel().rows;
-
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 48,
     overscan: 10,
   });
-
   const virtualItems = virtualizer.getVirtualItems();
   const totalVirtualSize = virtualizer.getTotalSize();
 
   return (
-    <div className="rounded-xl border border-(--border) bg-(--card)">
-      {/* toolbar */}
-      <div className="flex items-center justify-between gap-4 border-b border-(--border) px-4 py-3">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="search process or pid..."
-          className="w-64 rounded-lg border border-(--border) bg-(--muted) px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-(--muted-foreground) outline-none focus:border-(--accent) transition-colors"
-        />
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xs text-(--muted-foreground)">
-            user tasks only
-          </span>
-          <Switch checked={userOnly} onCheckedChange={setUserOnly} />
+    <>
+      {/* kill confirmation modal */}
+      <Dialog open={!!pendingKill} onOpenChange={() => setPendingKill(null)}>
+        <DialogContent className="bg-(--card) border-(--border) font-mono">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground">
+              <AlertTriangle className="h-4 w-4 text-(--severity-warning)" />
+              confirm kill
+            </DialogTitle>
+            <DialogDescription className="text-(--muted-foreground) font-mono text-xs pt-2">
+              you are about to terminate{" "}
+              <span className="text-(--severity-critical) font-bold">
+                {pendingKill?.name}
+              </span>{" "}
+              <span className="text-(--muted-foreground)">
+                (PID {pendingKill?.pid})
+              </span>
+              <br className="my-1" />
+              unsaved work in this process will be lost. this cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPendingKill(null)}
+              className="font-mono text-xs border-(--border) text-(--muted-foreground) hover:text-foreground">
+              cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleKill}
+              className="font-mono text-xs bg-(--severity-critical) hover:bg-(--severity-critical)/80 text-white border-0">
+              <Skull className="mr-1.5 h-3 w-3" />
+              kill process
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="rounded-xl border border-(--border) bg-(--card)">
+        {/* toolbar */}
+        <div className="flex items-center justify-between gap-4 border-b border-(--border) px-4 py-3">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="search process or pid..."
+            className="w-64 rounded-lg border border-(--border) bg-(--muted) px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-(--muted-foreground) outline-none focus:border-(--accent) transition-colors"
+          />
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-(--muted-foreground)">
+              user tasks only
+            </span>
+            <Switch checked={userOnly} onCheckedChange={setUserOnly} />
+          </div>
         </div>
-      </div>
 
-      {/* header */}
-      <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_80px] border-b border-(--border) px-4">
-        {table.getHeaderGroups().map((headerGroup) =>
-          headerGroup.headers.map((header) => (
-            <div
-              key={header.id}
-              onClick={
-                header.column.getCanSort()
-                  ? header.column.getToggleSortingHandler()
-                  : undefined
-              }
-              className={`py-2.5 font-mono text-[10px] uppercase tracking-widest text-(--muted-foreground) ${
-                header.column.getCanSort()
-                  ? "cursor-pointer select-none hover:text-foreground transition-colors"
-                  : ""
-              }`}>
-              {flexRender(header.column.columnDef.header, header.getContext())}
-              {header.column.getCanSort() && (
-                <SortIcon isSorted={header.column.getIsSorted()} />
-              )}
-            </div>
-          )),
-        )}
-      </div>
-
-      {/* virtualised rows */}
-      <div ref={parentRef} className="overflow-y-auto" style={{ height: 480 }}>
-        <div style={{ height: totalVirtualSize, position: "relative" }}>
-          {virtualItems.map((virtualItem) => {
-            const row = rows[virtualItem.index];
-            const killing = killingPids.has(row.original.pid);
-
-            return (
+        {/* header */}
+        <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_80px] border-b border-(--border) px-4">
+          {table.getHeaderGroups().map((headerGroup) =>
+            headerGroup.headers.map((header) => (
               <div
-                key={row.id}
-                style={{
-                  position: "absolute",
-                  top: virtualItem.start,
-                  left: 0,
-                  right: 0,
-                  height: virtualItem.size,
-                }}
-                className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_80px] items-center border-b border-(--border)/50 px-4 transition-opacity ${
-                  killing ? "opacity-40" : "hover:bg-(--muted)/50"
+                key={header.id}
+                onClick={
+                  header.column.getCanSort()
+                    ? header.column.getToggleSortingHandler()
+                    : undefined
+                }
+                className={`py-2.5 font-mono text-[10px] uppercase tracking-widest text-(--muted-foreground) ${
+                  header.column.getCanSort()
+                    ? "cursor-pointer select-none hover:text-foreground transition-colors"
+                    : ""
                 }`}>
-                {row.getVisibleCells().map((cell) => (
-                  <div key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </div>
-                ))}
+                {flexRender(
+                  header.column.columnDef.header,
+                  header.getContext(),
+                )}
+                {header.column.getCanSort() && (
+                  <SortIcon isSorted={header.column.getIsSorted()} />
+                )}
               </div>
-            );
-          })}
+            )),
+          )}
+        </div>
+
+        {/* virtualised rows */}
+        <div
+          ref={parentRef}
+          className="overflow-y-auto"
+          style={{ height: 480 }}>
+          <div style={{ height: totalVirtualSize, position: "relative" }}>
+            {virtualItems.map((virtualItem) => {
+              const row = rows[virtualItem.index];
+              const killing = killingPids.has(row.original.pid);
+
+              return (
+                <div
+                  key={row.id}
+                  style={{
+                    position: "absolute",
+                    top: virtualItem.start,
+                    left: 0,
+                    right: 0,
+                    height: virtualItem.size,
+                  }}
+                  className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_80px] items-center border-b border-(--border)/50 px-4 transition-opacity ${
+                    killing ? "opacity-40" : "hover:bg-(--muted)/50"
+                  }`}>
+                  {row.getVisibleCells().map((cell) => (
+                    <div key={cell.id}>
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* footer */}
+        <div className="border-t border-(--border) px-4 py-2">
+          <span className="font-mono text-[10px] text-(--muted-foreground)">
+            {rows.length} processes
+          </span>
         </div>
       </div>
-
-      {/* footer */}
-      <div className="border-t border-(--border) px-4 py-2">
-        <span className="font-mono text-[10px] text-(--muted-foreground)">
-          {rows.length} processes
-        </span>
-      </div>
-    </div>
+    </>
   );
 }
