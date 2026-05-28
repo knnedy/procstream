@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { MetricsPayload, ConnectionStatus } from "@/lib/types";
+import {
+  MetricsPayload,
+  SystemInfo,
+  ConnectionStatus,
+  WsMessage,
+} from "@/lib/types";
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
@@ -7,6 +12,7 @@ const WEBSOCKET_ENDPOINT = "/ws";
 
 export function useMetrics() {
   const [metrics, setMetrics] = useState<MetricsPayload | null>(null);
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("reconnecting");
   const [retryIn, setRetryIn] = useState<number>(0);
 
@@ -67,10 +73,18 @@ export function useMetrics() {
 
       ws.onmessage = (event) => {
         try {
-          const payload = JSON.parse(event.data) as MetricsPayload;
-          setMetrics(payload);
+          const message = JSON.parse(event.data) as WsMessage;
+
+          // init message arrives once on connect with static system info
+          if ("type" in message && message.type === "init") {
+            setSystemInfo(message.systemInfo);
+            return;
+          }
+
+          // all other messages are metrics payloads
+          setMetrics(message as MetricsPayload);
         } catch {
-          console.error("failed to parse metrics payload");
+          console.error("failed to parse websocket message");
         }
       };
 
@@ -86,5 +100,5 @@ export function useMetrics() {
     };
   }, []);
 
-  return { metrics, status, retryIn };
+  return { metrics, systemInfo, status, retryIn };
 }
