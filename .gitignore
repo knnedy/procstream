@@ -1,5 +1,6 @@
 # Go
-procstream
+bin/
+cmd/procstream/out
 
 # Frontend
 web/node_modules

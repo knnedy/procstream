@@ -10,10 +10,10 @@ web-build:
 	cp -r web/out cmd/procstream/out
 
 go-build: web-build
-	go build -o procstream ./cmd/procstream
+	go build -o bin/procstream ./cmd/procstream
 
 run: build
-	./procstream
+	./bin/procstream
 
 clean:
-	rm -rf web/out web/.next procstream cmd/procstream/out
+	rm -rf web/out web/.next bin cmd/procstream/out
