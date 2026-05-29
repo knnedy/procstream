@@ -2,7 +2,7 @@
 
 A lightweight, self-contained Linux system monitor that serves a real-time web dashboard over your local network. No installation required — just download and run a single binary.
 
-![ProcStream Dashboard](https://github.com/knnedy/procstream/releases/download/v0.1.0/preview.png)
+![ProcStream Dashboard](https://raw.githubusercontent.com/knnedy/procstream/main/preview.png)
 
 ---
 
