@@ -1,6 +1,9 @@
 # Go
 bin/
-cmd/procstream/out
+cmd/procstream/out/
+
+# GoReleaser output
+dist/
 
 # Frontend
 web/node_modules
