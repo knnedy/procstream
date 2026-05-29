@@ -4,17 +4,14 @@ project_name: procstream
 
 before:
   hooks:
-    # build the frontend before goreleaser compiles the binary
-    hooks:
-      - sh -c "cd web && pnpm install && pnpm run build"
-      - rm -rf cmd/procstream/out
-      - cp -r web/out cmd/procstream/out
+    - sh -c "cd web && pnpm install && pnpm run build"
+    - rm -rf cmd/procstream/out
+    - cp -r web/out cmd/procstream/out
 
 builds:
   - id: procstream
     main: ./cmd/procstream
     binary: procstream
-    # inject the version string at compile time
     ldflags:
       - -s -w -X main.Version={{.Version}}
     env:
