@@ -5,9 +5,10 @@ project_name: procstream
 before:
   hooks:
     # build the frontend before goreleaser compiles the binary
-    - cd web && pnpm install && pnpm run build
-    - rm -rf cmd/procstream/out
-    - cp -r web/out cmd/procstream/out
+    hooks:
+      - sh -c "cd web && pnpm install && pnpm run build"
+      - rm -rf cmd/procstream/out
+      - cp -r web/out cmd/procstream/out
 
 builds:
   - id: procstream
